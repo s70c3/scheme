@@ -356,11 +356,14 @@ evalAndPrint env expr =  evalString env expr >>= putStrLn
 evalString :: Env -> String -> IO String
 evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
 
-until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
-until_ pred prompt action = do 
+--pred_enter = (\x -> (x == null))
+
+until_ :: Monad m => (a -> Bool) -> (a -> Bool) -> m a -> (a -> m ()) -> m ()
+until_ pred pred_ent prompt action = do 
    result <- prompt
    if pred result then return ()
-      else action result >> until_ pred prompt action
+    else if pred_ent result then until_ pred  pred_ent prompt action
+      else action result >> until_ pred  pred_ent prompt action
 
 runOne :: [String] -> IO ()
 runOne args = do
@@ -369,7 +372,7 @@ runOne args = do
         >>= hPutStrLn stderr
 
 runRepl :: IO ()
-runRepl = primitiveBindings >>= until_ (\ x -> (x == ":q") || (x == "quit")) (readPrompt "LISP>>> ") . evalAndPrint
+runRepl = primitiveBindings >>= until_ (\ x -> (x == ":q") || (x == "quit")) (\x -> (x == "")) (readPrompt "LISP>>> ") . evalAndPrint
 
 makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
 makeNormalFunc = makeFunc Nothing
