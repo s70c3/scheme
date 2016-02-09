@@ -1,11 +1,11 @@
 
-module Main where
-import Text.ParserCombinators.Parsec hiding (spaces)
-import System.Environment
-import Control.Monad
-import Numeric
-import Control.Monad.Error
-import System.IO
+module Main where 
+import Text.ParserCombinators.Parsec hiding (spaces) 
+import System.Environment 
+import Control.Monad 
+import Numeric 
+import Control.Monad.Error 
+import System.IO 
 import Data.IORef
 
 data LispVal = Atom String
@@ -103,15 +103,11 @@ parseAtom = do first <- letter <|> symbol
                            "#f" -> Bool False
                            _    -> Atom atom
 parseNumber :: Parser LispVal
-parseNumber = parseDecimal1 <|> parseDecimal2 <|> parseHex <|> parseOct <|> parseBin
+parseNumber = parseDecimal1 <|> parseDecimal1 <|> parseHex <|> parseOct <|> parseBin
 
 parseDecimal1 :: Parser LispVal
 parseDecimal1 = many1 digit >>= (return . Number . read)
 
-parseDecimal2 :: Parser LispVal
-parseDecimal2 = do try $ string "#d"
-                   x <- many1 digit
-                   (return . Number . read) x
 parseHex :: Parser LispVal
 parseHex = do try $ string "#x"
               x <- many1 hexDigit
@@ -298,6 +294,7 @@ car [List (x : xs)]         = return x
 car [DottedList (x : xs) _] = return x
 car [badArg]                = throwError $ TypeMismatch "pair" badArg
 car badArgList              = throwError $ NumArgs 1 badArgList
+
 --take least ~ tail
 cdr :: [LispVal] -> ThrowsError LispVal
 cdr [List (x : xs)]         = return $ List xs
@@ -349,11 +346,9 @@ equal badArgList = throwError $ NumArgs 2 badArgList
 
 
 --IO
-flushStr :: String -> IO ()
-flushStr str = putStr str >> hFlush stdout
 
 readPrompt :: String -> IO String
-readPrompt prompt = flushStr prompt >> getLine
+readPrompt prompt = putStr prompt >> hFlush stdout >> getLine
 
 evalAndPrint :: Env -> String -> IO ()
 evalAndPrint env expr =  evalString env expr >>= putStrLn
@@ -364,8 +359,7 @@ evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>
 until_ :: Monad m => (a -> Bool) -> m a -> (a -> m ()) -> m ()
 until_ pred prompt action = do 
    result <- prompt
-   if pred result 
-      then return ()
+   if pred result then return ()
       else action result >> until_ pred prompt action
 
 runOne :: [String] -> IO ()
