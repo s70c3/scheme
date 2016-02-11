@@ -7,7 +7,7 @@ import Numeric
 import Control.Monad.Error 
 import System.IO 
 import Data.IORef
-
+import System.Console.Haskeline
 data LispVal = Atom String
              | List [LispVal]
              | DottedList [LispVal] LispVal
@@ -347,23 +347,7 @@ equal badArgList = throwError $ NumArgs 2 badArgList
 
 --IO
 
-readPrompt :: String -> IO String
-readPrompt prompt = putStr prompt >> hFlush stdout >> getLine
 
-evalAndPrint :: Env -> String -> IO ()
-evalAndPrint env expr =  evalString env expr >>= putStrLn
-
-evalString :: Env -> String -> IO String
-evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
-
---pred_enter = (\x -> (x == null))
-
-until_ :: Monad m => (a -> Bool) -> (a -> Bool) -> m a -> (a -> m ()) -> m ()
-until_ pred pred_ent prompt action = do 
-   result <- prompt
-   if pred result then return ()
-    else if pred_ent result then until_ pred  pred_ent prompt action
-      else action result >> until_ pred  pred_ent prompt action
 
 runOne :: [String] -> IO ()
 runOne args = do
@@ -371,8 +355,34 @@ runOne args = do
     (runIOThrows $ liftM show $ eval env (List [Atom "load", String (args !! 0)])) 
         >>= hPutStrLn stderr
 
-runRepl :: IO ()
-runRepl = primitiveBindings >>= until_ (\ x -> (x == ":q") || (x == "quit")) (\x -> (x == "")) (readPrompt "LISP>>> ") . evalAndPrint
+evalString :: Env -> String -> IO String
+evalString env expr = runIOThrows $ liftM show $ (liftThrows $ readExpr expr) >>= eval env
+
+primitiveBindings :: IO Env
+primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
+                                               ++ map (makeFunc PrimitiveFunc) primitives)
+     where makeFunc constructor (var, func) = (var, constructor func)
+
+runRepl :: InputT IO ()
+runRepl = do
+      minput <- getInputLine "LISP>>"
+      case minput of
+          Nothing -> return ()
+          Just "quit" -> return ()
+          Just ":q" -> return ()
+          Just "" -> runRepl
+          Just input -> do 
+                          env <- liftIO $ primitiveBindings
+                          result <- liftIO $ evalString env input 
+                          outputStrLn result
+                          runRepl
+
+
+until_ :: Monad m => (a -> Bool)  -> m a -> (a -> m ()) -> m ()
+until_ pred prompt action = do 
+   result <- prompt
+   if pred result then return ()
+      else action result >> until_ pred  prompt action
 
 makeFunc varargs env params body = return $ Func (map showVal params) varargs body env
 makeNormalFunc = makeFunc Nothing
@@ -422,10 +432,7 @@ bindVars envRef bindings = readIORef envRef >>= extendEnv bindings >>= newIORef
            addBinding (var, value) = do ref <- newIORef value
                                         return (var, ref)
 --Functions
-primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map (makeFunc IOFunc) ioPrimitives
-                                               ++ map (makeFunc PrimitiveFunc) primitives)
-     where makeFunc constructor (var, func) = (var, constructor func)
+
 --files
 readOrThrow :: Parser a -> String -> ThrowsError a
 readOrThrow parser input = case parse parser "lisp" input of
@@ -459,4 +466,4 @@ readAll [String filename] = liftM List $ load filename
 -- Main
 main :: IO ()
 main = do args <- getArgs
-          if null args then runRepl else runOne $ args
+          if null args then runInputT defaultSettings runRepl else runOne $ args
